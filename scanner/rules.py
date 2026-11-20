@@ -54,7 +54,27 @@ CLASSIFICATION = {
     "FREE_TEXT":     ("Texte libre", "Confidentiel"),
 }
 
-# --- 4. Seuils de décision ------------------------------------------------------
+# --- 4. Politiques de protection proposées par type ---------------------------
+# méthode de masquage → (exemple de résultat, explication)
+MASKING = {
+    "CIN":           ("HASH",           "SHA-256 : illisible, mais deux CIN identiques donnent le même code (jointures possibles)"),
+    "IBAN":          ("PARTIAL_LAST4",  "MA************************1234 : seuls les 4 derniers chiffres restent visibles"),
+    "PHONE":         ("PARTIAL_PHONE",  "06******78 : préfixe et 2 derniers chiffres visibles"),
+    "EMAIL":         ("PARTIAL_EMAIL",  "a***@domaine.ma : le domaine reste utile pour l'analyse"),
+    "PERSON":        ("REDACT",         "remplacé par [MASQUÉ]"),
+    "ADDRESS":       ("REDACT",         "remplacé par [MASQUÉ] (la ville reste dans sa propre colonne)"),
+    "DATE_OF_BIRTH": ("YEAR_ONLY",      "1997-10-18 → 1997 : permet de calculer des tranches d'âge"),
+    "FREE_TEXT":     ("ANONYMIZE_TEXT", "les noms, CIN, téléphones… sont remplacés dans le texte par <PERSON>, <CIN>…"),
+}
+
+# niveau de sensibilité → rôles autorisés à voir la donnée EN CLAIR
+# (tous les autres rôles, dont « analyst », ne voient que la version masquée)
+CLEAR_ACCESS = {
+    "Restreint":    ["dpo"],
+    "Confidentiel": ["dpo", "support_client"],
+}
+
+# --- 5. Seuils de décision ------------------------------------------------------
 THRESHOLD_PII = 0.7       # score >= 0.7  → donnée personnelle
 THRESHOLD_REVIEW = 0.4    # 0.4 à 0.7     → à vérifier par un humain
 FREE_TEXT_MIN_LENGTH = 40 # longueur moyenne au-delà de laquelle une colonne est du texte libre
