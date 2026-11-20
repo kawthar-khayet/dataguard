@@ -1,0 +1,26 @@
+# DataGuard — infrastructure locale
+# Pour l'instant : un seul service, la base PostgreSQL qui contient les données sources.
+# Démarrer :  docker compose up -d
+# Arrêter  :  docker compose down        (ajouter -v pour effacer aussi les données)
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: dataguard-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"        # port de ta machine : port du conteneur
+    volumes:
+      - pgdata:/var/lib/postgresql/data          # les données survivent au redémarrage
+      - ./db/init:/docker-entrypoint-initdb.d:ro # scripts SQL exécutés au 1er démarrage
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
