@@ -1,0 +1,24 @@
+﻿version: 2
+
+# Les analystes ne doivent voir AUCUNE donnée personnelle en clair.
+# Le support client peut voir les données « Confidentiel » (téléphone, e-mail),
+# mais jamais les données « Restreint » (CIN, IBAN).
+
+models:
+  - name: analyst_clients
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, PHONE, IBAN, EMAIL, PERSON_AR]}}}]
+  - name: analyst_abonnements
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, PHONE, IBAN, EMAIL, PERSON_AR]}}}]
+  - name: analyst_paiements
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, PHONE, IBAN, EMAIL, PERSON_AR]}}}]
+  - name: analyst_reclamations
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, PHONE, IBAN, EMAIL, PERSON_AR]}}}]
+
+  - name: support_clients
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, IBAN]}}}]
+  - name: support_abonnements
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, IBAN]}}}]
+  - name: support_paiements
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, IBAN]}}}]
+  - name: support_reclamations
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, IBAN]}}}]

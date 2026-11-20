@@ -25,6 +25,10 @@ TEXT_PATTERNS = {
     "PHONE": r"(?:\+212|\b0)[5-7](?:\s?\d){8}\b",
     "EMAIL": VALUE_PATTERNS["EMAIL"],
     "IBAN":  r"\bMA\d{26}\b",
+    # Le modèle NER français ne reconnaît pas les noms écrits en arabe au milieu
+    # d'une phrase (constaté : 35 sur 41 oubliés). Règle de prudence : dans une base
+    # rédigée en français, une suite de mots en alphabet arabe est traitée comme un nom.
+    "PERSON_AR": r"[؀-ۿ]+(?:\s+[؀-ۿ]+)+",
 }
 
 # --- 2. Mots-clés dans les NOMS de colonnes ---------------------------------
@@ -51,7 +55,9 @@ CLASSIFICATION = {
     "PHONE":         ("Contact",    "Confidentiel"),
     "EMAIL":         ("Contact",    "Confidentiel"),
     "ADDRESS":       ("Contact",    "Confidentiel"),
-    "FREE_TEXT":     ("Texte libre", "Confidentiel"),
+    # Un texte libre peut contenir N'IMPORTE QUELLE donnée (CIN, IBAN…) :
+    # on lui donne le niveau le plus élevé de ce qu'il peut contenir.
+    "FREE_TEXT":     ("Texte libre", "Restreint"),
 }
 
 # --- 4. Politiques de protection proposées par type ---------------------------

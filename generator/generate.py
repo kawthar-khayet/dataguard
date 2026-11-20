@@ -148,7 +148,7 @@ GROUND_TRUTH = [
     ("reclamations", "client_id",      False, None,        "Interne"),
     ("reclamations", "date_creation",  False, None,        "Interne"),
     ("reclamations", "canal",          False, None,        "Public"),
-    ("reclamations", "commentaire",    True,  "FREE_TEXT", "Confidentiel"),  # NLP
+    ("reclamations", "commentaire",    True,  "FREE_TEXT", "Restreint"),  # NLP ; peut contenir des CIN/IBAN
 ]
 
 

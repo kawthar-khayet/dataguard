@@ -1,0 +1,30 @@
+# DataGuard — projet dbt : construit les vues protégées à partir des politiques APPROUVÉES.
+name: dataguard
+version: "1.0.0"
+config-version: 2
+profile: dataguard
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+# Avant chaque exécution : créer les rôles d'accès s'ils n'existent pas.
+on-run-start:
+  - "{{ create_roles() }}"
+  - "{{ store_hash_salt() }}"
+  - "{{ create_text_anonymized() }}"
+# Après : donner à chaque rôle l'accès à SON schéma, et à rien d'autre.
+on-run-end:
+  - "{{ grant_schema_usage() }}"
+
+models:
+  dataguard:
+    +materialized: view          # une vue ne copie pas les données : elle masque à la lecture
+    analyst:
+      +schema: analyst           # tout est masqué
+      +grants:
+        select: ["analyst"]
+    support:
+      +schema: support           # données « Confidentiel » en clair, « Restreint » masquées
+      +grants:
+        select: ["support_client"]
