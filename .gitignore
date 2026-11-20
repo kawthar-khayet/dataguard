@@ -11,3 +11,8 @@ dbt/target/
 dbt/logs/
 dbt/dbt_packages/
 dbt/.user.yml
+
+# Données externes : chacun les télécharge (licences), seul le README est commité
+data/external/**
+!data/external/README.md
+!data/external/*/
