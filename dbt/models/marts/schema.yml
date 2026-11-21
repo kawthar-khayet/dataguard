@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: dim_clients
+    description: Une ligne par personne (comptes CRM en double fusionnés).
+    columns:
+      - name: client_id
+        tests: [unique, not_null]
+      - name: cin
+        description: Après dédoublonnage, un CIN ne doit apparaître qu'une fois.
+        tests: [unique]
+
+  - name: fct_factures
+    columns:
+      - name: num_facture
+        tests: [unique, not_null]
+      - name: client_id
+        tests:
+          - relationships:
+              arguments: {to: ref('dim_clients'), field: client_id}
+
+  - name: fct_revenus_mensuels
+    tests:
+      - unique_combination:
+          arguments: {columns: [client_id, mois]}
+
+  - name: fct_trafic_antennes
+    columns:
+      - name: cell_id
+        tests: [unique, not_null]
+      - name: nb_abonnes_distincts
+        description: Toujours >= 5 (k-anonymat).
+
+  - name: fct_resiliations
+    columns:
+      - name: client_id
+        tests: [unique, not_null]

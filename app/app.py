@@ -80,7 +80,7 @@ with tab_overview:
 
     st.subheader("Couverture par table")
     coverage = (catalog.assign(sensible=catalog.decision != "Non sensible")
-                .groupby("table_name")
+                .groupby("table_name", sort=False)
                 .agg(colonnes=("column_name", "count"), sensibles=("sensible", "sum"))
                 .reset_index())
     st.dataframe(coverage, hide_index=True, use_container_width=True)
@@ -102,6 +102,26 @@ with tab_validation:
         st.success("Aucune politique en attente. 🎉")
     if not admin:
         st.warning("Renseigne ton nom d'administrateur dans la barre latérale pour pouvoir décider.")
+
+    # Les restrictions d'accès aux couches techniques (crm, raw, staging) sont nombreuses et
+    # sans ambiguïté quand la détection est sûre : on peut les approuver en une fois.
+    # Les cas incertains (« À vérifier ») restent à examiner un par un.
+    bulk = pending[(pending.masking_method == "RESTRICT_ACCESS") & (pending.decision == "PII")]
+    if not bulk.empty:
+        with st.container(border=True):
+            st.markdown(f"**{len(bulk)} restrictions d'accès** aux couches techniques "
+                        f"(crm, raw, staging), détection sûre : seuls `data_engineer` et `dpo` y accèdent.")
+            if st.button(f"✅ Approuver les {len(bulk)} restrictions", disabled=not admin):
+                with connect() as conn:
+                    for pid in bulk.policy_id:
+                        decide(conn, int(pid), True, admin, "approbation groupée des couches techniques")
+                st.rerun()
+        pending = pending.drop(bulk.index)
+
+    layers = sorted({t.split(".")[0] for t in pending.table_name})
+    if layers:
+        chosen = st.multiselect("Couches", layers, default=layers)
+        pending = pending[pending.table_name.str.split(".").str[0].isin(chosen)]
 
     for p in pending.itertuples():
         icon = "⚠️" if p.decision == "À vérifier" else "🔒"

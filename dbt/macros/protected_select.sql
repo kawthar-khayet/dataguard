@@ -1,23 +1,30 @@
 {#
-  Le cœur de la protection : génère le SELECT d'une table source pour un rôle donné.
+  Le cœur de la protection : génère le SELECT d'un mart pour un rôle donné.
 
-  Pour chaque colonne de la table :
-    - une politique APPROUVÉE existe, et le rôle n'est pas autorisé en clair → colonne masquée
-    - sinon → colonne en clair
+  Pour chaque colonne du mart :
+    - une politique APPROUVÉE ou EN ATTENTE existe, et le rôle n'est pas autorisé
+      en clair → colonne masquée
+    - politique REJETÉE (un humain a dit « pas une donnée personnelle ») ou aucune → en clair
 
-  Les politiques sont lues dans governance.policy AU MOMENT DU BUILD : quand un
-  administrateur approuve une politique dans Streamlit, le prochain `dbt build`
-  l'applique, sans modifier aucun fichier SQL.
+  Protection par défaut (« privacy by default ») : tant qu'un humain n'a pas décidé,
+  on masque. Seul un REJET explicite peut remettre une colonne en clair.
+
+  Les politiques sont lues dans governance.policy AU MOMENT DU BUILD : une décision
+  prise dans Streamlit est appliquée au prochain build, sans modifier aucun fichier SQL.
+
+  relation  : ref('dim_clients')       (le mart à protéger)
+  mart_name : 'dim_clients'            (son nom dans le catalogue : marts.dim_clients)
 #}
 
-{% macro protected_select(table_name, role) %}
-  {%- set src = source('source', table_name) -%}
+{% macro protected_select(relation, mart_name, role) %}
+  {%- set table_name = 'marts.' ~ mart_name -%}
 
   {%- if execute -%}
-    {%- set columns = adapter.get_columns_in_relation(src) -%}
+    {%- set columns = adapter.get_columns_in_relation(relation) -%}
     {%- set policies = run_query(
           "select column_name, masking_method, array_to_string(clear_roles, ',') as clear_roles "
-          ~ "from governance.policy where status = 'approuvée' and table_name = '" ~ table_name ~ "'") -%}
+          ~ "from governance.policy where status in ('approuvée', 'proposée') "
+          ~ "and table_name = '" ~ table_name ~ "'") -%}
     {%- set rules = {} -%}
     {%- for p in policies.rows -%}
       {%- do rules.update({p['column_name']: p}) -%}
@@ -32,8 +39,8 @@
       {{ adapter.quote(c.name) }}
       {%- endif %}{{ "," if not loop.last }}
     {%- endfor %}
-    from {{ src }}
+    from {{ relation }}
   {%- else -%}
-    select * from {{ src }}
+    select * from {{ relation }}
   {%- endif -%}
 {% endmacro %}

@@ -1,6 +1,7 @@
 faker>=40.0   # les locales fr_DZ / ar_DZ n'existent pas dans les versions plus anciennes
 psycopg[binary]==3.*
 python-dotenv==1.*
+pandas>=2.2
 streamlit==1.*
 dbt-core==1.12.*
 dbt-postgres==1.11.*

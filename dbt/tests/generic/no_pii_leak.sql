@@ -12,16 +12,18 @@
 #}
 
 {% test no_pii_leak(model, forbidden) %}
+  {#- Les frontières excluent les lettres et le tiret : sinon un n° de facture « F202606-0001 »
+      ressemble à un CIN, et un hash « …a0612345678b… » à un téléphone (faux positifs constatés). #}
   {%- set patterns = {
-      'CIN':   '(^|[^A-Za-z0-9])[A-Z]{1,2}[0-9]{5,6}([^A-Za-z0-9]|$)',
-      'PHONE': '(^|[^0-9+])([+]212|0)[5-7]( ?[0-9]){8}([^0-9]|$)',
-      'IBAN':  'MA[0-9]{26}',
+      'CIN':   '(^|[^A-Za-z0-9-])[A-Za-z]{1,2} ?[0-9]{5,6}([^A-Za-z0-9-]|$)',
+      'PHONE': '(^|[^0-9A-Za-z+])([+]?212[ .-]?|0)[5-7]([ .-]?[0-9]){8}([^0-9A-Za-z]|$)',
+      'IBAN':  'MA( ?[0-9]){26}',
       'EMAIL': '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}',
       'PERSON_AR': '[؀-ۿ]+[[:space:]]+[؀-ۿ]+',
   } -%}
 
   {%- if execute -%}
-    {%- set table_name = model.identifier -%}
+    {%- set table_name = 'marts.' ~ model.identifier -%}   {# la vue analyst.dim_clients protège marts.dim_clients #}
     {%- set rejected = run_query(
           "select column_name from governance.policy where status = 'rejetée' "
           ~ "and table_name = '" ~ table_name ~ "'").columns[0].values() -%}

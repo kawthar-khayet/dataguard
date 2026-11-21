@@ -16,3 +16,6 @@ dbt/.user.yml
 data/external/**
 !data/external/README.md
 !data/external/*/
+
+# Fichiers générés par generator/sources.py (contiennent des PII synthétiques)
+data/landing/

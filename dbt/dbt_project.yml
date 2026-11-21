@@ -1,30 +1,50 @@
-# DataGuard — projet dbt : construit les vues protégées à partir des politiques APPROUVÉES.
+# DataGuard — projet dbt
+#
+#   raw (ingestion Python) ──► staging ──► marts ──► protected (vues masquées par rôle)
+#
+# Deux phases :
+#   tag:transform  → staging + marts      (nettoyer, dédoublonner, relier les systèmes)
+#   tag:protected  → vues analyst/support (appliquer les politiques APPROUVÉES)
+# Entre les deux : le scanner analyse les couches et un humain valide les politiques.
 name: dataguard
-version: "1.0.0"
+version: "2.0.0"
 config-version: 2
 profile: dataguard
 
 model-paths: ["models"]
 macro-paths: ["macros"]
 test-paths: ["tests"]
+seed-paths: ["seeds"]
 
-# Avant chaque exécution : créer les rôles d'accès s'ils n'existent pas.
 on-run-start:
   - "{{ create_roles() }}"
   - "{{ store_hash_salt() }}"
   - "{{ create_text_anonymized() }}"
-# Après : donner à chaque rôle l'accès à SON schéma, et à rien d'autre.
 on-run-end:
-  - "{{ grant_schema_usage() }}"
+  - "{{ grant_access() }}"
+
+seeds:
+  dataguard:
+    +schema: ref                 # tables de référence (ex. normalisation des villes)
 
 models:
   dataguard:
-    +materialized: view          # une vue ne copie pas les données : elle masque à la lecture
-    analyst:
-      +schema: analyst           # tout est masqué
-      +grants:
-        select: ["analyst"]
-    support:
-      +schema: support           # données « Confidentiel » en clair, « Restreint » masquées
-      +grants:
-        select: ["support_client"]
+    staging:
+      +schema: staging
+      +materialized: view        # nettoyage « à la lecture », toujours à jour avec raw
+      +tags: ["transform"]
+    marts:
+      +schema: marts
+      +materialized: table       # tables métier, prêtes pour l'analyse
+      +tags: ["transform"]
+    protected:
+      +materialized: view        # une vue ne copie pas les données : elle masque à la lecture
+      +tags: ["protected"]
+      analyst:
+        +schema: analyst         # tout est masqué
+        +grants:
+          select: ["analyst"]
+      support:
+        +schema: support         # « Confidentiel » en clair, « Restreint » masqué
+        +grants:
+          select: ["support_client"]

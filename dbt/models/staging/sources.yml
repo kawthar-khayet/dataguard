@@ -1,0 +1,23 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Données chargées telles quelles par ingestion/load_raw.py (tout en texte).
+    tables:
+      - name: crm_clients
+        description: Réplication de crm.clients (doublons, formats mélangés, valeurs « N/A »).
+      - name: crm_contrats
+        description: Réplication de crm.contrats (basée sur les vraies données IBM Telco).
+      - name: factures
+        description: Exports CSV mensuels de la facturation (client identifié par son téléphone).
+      - name: cdr
+        description: Détail des appels de novembre, sur les vraies antennes OpenCelliD.
+      - name: tickets
+        description: Tickets du centre d'appel (JSON aplati), notes en texte libre.
+      - name: antennes
+        description: Antennes mobiles du Maroc (OpenCelliD, CC BY-SA 4.0).
+
+  - name: governance
+    description: Tables de DataGuard (utilisées ici seulement pour tester le dédoublonnage).
+    tables:
+      - name: ground_truth_dups

@@ -23,7 +23,7 @@ ENTITIES = ["PERSON"] + [f"MA_{t}" for t in rules.TEXT_PATTERNS]
 
 # À incrémenter quand les règles changent : les textes déjà anonymisés avec une
 # ancienne version sont alors recalculés (sinon le cache garderait d'anciennes fuites).
-ANONYMIZER_VERSION = 2
+ANONYMIZER_VERSION = 3   # v3 : téléphones et IBAN dans leurs formats « sales »
 
 TAGS = {"PERSON_AR": "PERSON"}   # un nom en arabe reste un <PERSON>
 
@@ -45,7 +45,8 @@ def anonymize_text(text: str) -> str:
 
 
 def run(conn) -> int:
-    """Anonymise les colonnes dont la politique ANONYMIZE_TEXT est approuvée. Renvoie le nb de textes traités."""
+    """Anonymise les colonnes dont la politique ANONYMIZE_TEXT est approuvée ou en attente.
+    Renvoie le nb de textes traités."""
     conn.execute("""
         CREATE TABLE IF NOT EXISTS governance.text_anonymized (
             table_name TEXT, column_name TEXT, text_hash TEXT, anonymized TEXT,
@@ -54,7 +55,8 @@ def run(conn) -> int:
     conn.execute("DELETE FROM governance.text_anonymized WHERE version < %s", (ANONYMIZER_VERSION,))
     targets = conn.execute("""
         SELECT table_name, column_name FROM governance.policy
-        WHERE status = 'approuvée' AND masking_method = 'ANONYMIZE_TEXT'""").fetchall()
+        WHERE status IN ('approuvée', 'proposée')      -- protection par défaut, comme dans dbt
+          AND masking_method = 'ANONYMIZE_TEXT'""").fetchall()
 
     total = 0
     for table_name, column_name in targets:
@@ -62,7 +64,7 @@ def run(conn) -> int:
             "SELECT text_hash FROM governance.text_anonymized WHERE table_name = %s AND column_name = %s",
             (table_name, column_name))}
         texts = conn.execute(sql.SQL("SELECT DISTINCT {c} FROM {t} WHERE {c} IS NOT NULL").format(
-            c=sql.Identifier(column_name), t=sql.Identifier("source", table_name))).fetchall()
+            c=sql.Identifier(column_name), t=sql.Identifier(*table_name.split(".")))).fetchall()
         new_rows = []
         for (text,) in texts:
             h = hashlib.md5(text.encode("utf-8")).hexdigest()   # = md5() de PostgreSQL

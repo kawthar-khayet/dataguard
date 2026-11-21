@@ -1,0 +1,26 @@
+version: 2
+
+# Analystes : AUCUNE donnée personnelle en clair.
+# Support client : « Confidentiel » (téléphone, e-mail) autorisé, jamais « Restreint » (CIN, IBAN).
+
+models:
+  - name: analyst_dim_clients
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, PHONE, IBAN, EMAIL, PERSON_AR]}}}]
+  - name: analyst_fct_factures
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, PHONE, IBAN, EMAIL, PERSON_AR]}}}]
+  - name: analyst_fct_revenus_mensuels
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, PHONE, IBAN, EMAIL, PERSON_AR]}}}]
+  - name: analyst_fct_trafic_antennes
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, PHONE, IBAN, EMAIL, PERSON_AR]}}}]
+  - name: analyst_fct_resiliations
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, PHONE, IBAN, EMAIL, PERSON_AR]}}}]
+  - name: support_dim_clients
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, IBAN]}}}]
+  - name: support_fct_factures
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, IBAN]}}}]
+  - name: support_fct_revenus_mensuels
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, IBAN]}}}]
+  - name: support_fct_trafic_antennes
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, IBAN]}}}]
+  - name: support_fct_resiliations
+    tests: [{no_pii_leak: {arguments: {forbidden: [CIN, IBAN]}}}]

@@ -13,6 +13,11 @@ Cycle de vie d'une politique :
     proposée ──► approuvée
              └─► rejetée        (ex. code_offre : l'administrateur confirme que ce n'est pas une PII)
     n'importe quel statut ──► obsolète   (la colonne a disparu ou son type a changé)
+
+La politique dépend de la COUCHE :
+  - marts (exposée aux analystes)  → masquage adapté au type (HASH, PARTIAL_PHONE…)
+  - crm, raw, staging (techniques)  → RESTRICT_ACCESS : aucun accès analyste ;
+    appliquée par les droits PostgreSQL (dbt/macros/access.sql)
 """
 from scanner import rules
 
@@ -64,11 +69,18 @@ def propose_policies(conn, run_id: int) -> list[tuple]:
     for key, (pii_type, sensitivity, decision) in sensitive.items():
         if key in still_live:
             continue
-        method, explanation = rules.MASKING[pii_type]
-        clear_roles = rules.CLEAR_ACCESS.get(sensitivity, ["dpo"])
+        layer = key[0].split(".")[0]
+        if layer in rules.EXPOSED_LAYERS:
+            # Couche exposée aux analystes → masquage colonne par colonne
+            method, explanation = rules.MASKING[pii_type]
+            clear_roles = rules.CLEAR_ACCESS.get(sensitivity, ["dpo"])
+        else:
+            # Couche technique → personne d'autre que data_engineer/dpo n'y accède
+            method, explanation = rules.RESTRICT
+            clear_roles = rules.RESTRICTED_ROLES
         rationale = f"{pii_type} ({sensitivity}) → {method} : {explanation}"
         if decision == "À vérifier":
-            rationale += " | Détection incertaine : par prudence, on propose de masquer."
+            rationale += " | Détection incertaine : par prudence, on propose de protéger."
         conn.execute("""
             INSERT INTO governance.policy (table_name, column_name, pii_type, sensitivity,
                 masking_method, clear_roles, rationale, proposed_run)

@@ -1,0 +1,48 @@
+version: 2
+
+models:
+  - name: stg_crm_clients
+    description: Clients du CRM nettoyés (doublons encore présents).
+    columns:
+      - name: client_id
+        tests: [unique, not_null]
+      - name: ville
+        description: Ville normalisée grâce à la table de référence villes_normalisation.
+        tests:
+          - not_null:
+              config: {severity: warn}     # une nouvelle variante inconnue doit être ajoutée au seed
+
+  - name: int_client_dedup
+    description: Rattache chaque compte CRM à son compte maître (même CIN = même personne).
+    columns:
+      - name: client_id
+        tests: [unique, not_null]
+
+  - name: stg_crm_contrats
+    columns:
+      - name: client_id
+        tests: [unique, not_null]
+      - name: statut
+        tests:
+          - accepted_values:
+              arguments: {values: ["actif", "résilié"]}
+      - name: total_facture
+        tests: [not_null]
+
+  - name: stg_factures
+    description: Factures dédoublonnées (certaines lignes étaient exportées deux fois).
+    columns:
+      - name: num_facture
+        tests: [unique, not_null]
+      - name: date_facture
+        tests: [not_null]
+
+  - name: stg_tickets
+    columns:
+      - name: ticket_id
+        tests: [unique, not_null]
+
+  - name: stg_antennes
+    columns:
+      - name: cell_id
+        tests: [unique, not_null]

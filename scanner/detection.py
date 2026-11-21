@@ -55,7 +55,12 @@ def analyzer() -> AnalyzerEngine:
 
 
 def is_person_name(value: str) -> bool:
-    """Vrai si le NER reconnaît une personne qui couvre presque toute la valeur."""
+    """Vrai si le NER reconnaît une personne qui couvre presque toute la valeur.
+    Le modèle a appris sur des textes normalement écrits : « BENCHEIKH RABAH » en
+    majuscules n'est pas reconnu (constaté sur crm.clients_backup_2019). On le
+    présente donc au NER sous la forme « Bencheikh Rabah »."""
+    if value.isupper():
+        value = value.title()
     for r in analyzer().analyze(value, language="fr", entities=["PERSON"]):
         if (r.end - r.start) >= 0.8 * len(value.strip()):
             return True
@@ -70,7 +75,8 @@ def text_entities(value: str) -> set[str]:
 
 # --- Détection d'une colonne ---------------------------------------------------------
 def detect(col: ColumnProfile) -> Detection:
-    sample = [v.strip() for v in col.sample if v and v.strip()]
+    # Les « N/A », « inconnu »… sont ignorés : ils ne doivent pas faire baisser le score.
+    sample = [v.strip() for v in col.sample if v and not rules.is_placeholder(v)]
     hint = rules.name_type(col.column_name)
     negative = rules.has_negative_keyword(col.column_name)
     is_text = col.data_type in ("text", "character varying")
@@ -93,16 +99,28 @@ def detect(col: ColumnProfile) -> Detection:
     best_type, best = max(evidence.items(), key=lambda kv: kv[1])
     source = f"regex {best_type} : {best:.0%} des valeurs"
 
-    # Pas de format reconnu sur une colonne texte → on essaie le NER (noms de personnes)
-    if is_text and best < 0.5:
+    # Pas de format reconnu sur une colonne texte → on essaie le NER (noms de personnes).
+    # Un nom ne contient pas de chiffres : on saute le NER (coûteux) sur les colonnes
+    # majoritairement numériques (montants, dates, identifiants techniques…).
+    # Une colonne de noms de personnes a beaucoup de valeurs différentes : avec 3 valeurs
+    # distinctes (« Fibre », « ADSL », « Aucun »), ce n'est pas une liste de personnes,
+    # même si le NER se trompe dessus (faux positif constaté sur marts.fct_resiliations.internet).
+    with_digits = sum(1 for v in sample if any(ch.isdigit() for ch in v)) / len(sample)
+    many_values = col.distinct_ratio >= 0.05
+    if is_text and best < 0.5 and with_digits < 0.5 and many_values:
         ner_ratio = sum(1 for v in sample if is_person_name(v)) / len(sample)
         if ner_ratio > best:
             best_type, best = "PERSON", ner_ratio
             source = f"NER PERSON : {ner_ratio:.0%} des valeurs"
 
-    # Règle contextuelle : une colonne de type date nommée "naissance" est une date de naissance
-    if col.data_type == "date" and hint == "DATE_OF_BIRTH":
-        best_type, best, source = "DATE_OF_BIRTH", 1.0, "type date + nom de colonne"
+    # Règle contextuelle : une date (vrai type date, ou texte au format date) dans une colonne
+    # nommée « naissance » est une date de naissance.
+    if hint == "DATE_OF_BIRTH":
+        date_ratio = 1.0 if col.data_type == "date" else \
+            sum(1 for v in sample if rules.DATE_REGEX.fullmatch(v)) / len(sample)
+        if date_ratio >= 0.5:
+            best_type, best = "DATE_OF_BIRTH", date_ratio
+            source = f"format date : {date_ratio:.0%} des valeurs"
 
     # Aucun indice dans les valeurs, mais le nom suggère un type → on le signale quand même
     if best < 0.3 and hint:
@@ -137,4 +155,23 @@ def _result(col: ColumnProfile, pii_type, score: float, evidence: str) -> Detect
 
 
 def detect_all(profiles: list[ColumnProfile]) -> list[Detection]:
-    return [detect(p) for p in profiles]
+    detections = [detect(p) for p in profiles]
+    return _location_rule(profiles, detections)
+
+
+DIRECT_IDENTIFIERS = {"PHONE", "CIN", "PERSON", "EMAIL"}
+
+def _location_rule(profiles, detections):
+    """Règle au niveau de la TABLE : une colonne de localisation (antenne, latitude…)
+    devient sensible si la même table contient un identifiant de personne.
+    Exemple : raw.cdr = téléphone de l'abonné + antenne + heure → on sait où il était."""
+    identified_tables = {d.table_name for d in detections
+                         if d.decision == "PII" and d.pii_type in DIRECT_IDENTIFIERS}
+    result = []
+    for p, d in zip(profiles, detections):
+        if (d.decision == "Non sensible" and p.table_name in identified_tables
+                and rules.is_location_name(p.column_name)):
+            d = _result(p, "LOCATION", 0.75,
+                        "nom de colonne de localisation dans une table qui identifie des personnes")
+        result.append(d)
+    return result

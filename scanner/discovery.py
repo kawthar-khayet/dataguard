@@ -20,13 +20,16 @@ from psycopg import sql
 
 from scanner.db import connect
 
-SCHEMA = "source"
+# Toutes les couches de la plateforme, de la source brute aux tables métier.
+# (Les vues protégées analyst/support sont des SORTIES de DataGuard : on ne les scanne pas.)
+SCHEMAS = ["crm", "raw", "staging", "marts"]
 SAMPLE_SIZE = 200
 
 
 @dataclass
 class ColumnProfile:
-    table_name: str
+    schema_name: str
+    table: str           # nom court, ex. « clients »
     column_name: str
     data_type: str
     n_rows: int = 0
@@ -35,25 +38,32 @@ class ColumnProfile:
     avg_length: float = 0.0
     sample: list[str] = field(default_factory=list, repr=False)  # en mémoire uniquement
 
+    @property
+    def table_name(self) -> str:
+        """Nom complet utilisé dans le catalogue, ex. « crm.clients »."""
+        return f"{self.schema_name}.{self.table}"
+
 
 def discover_columns(conn) -> list[ColumnProfile]:
-    """Étape 1 : liste les colonnes via information_schema (aucune donnée lue)."""
+    """Étape 1 : liste les colonnes via information_schema (aucune donnée lue).
+    Les tables et colonnes techniques (commençant par _) sont ignorées."""
     rows = conn.execute(
         """
-        SELECT table_name, column_name, data_type
+        SELECT table_schema, table_name, column_name, data_type
         FROM information_schema.columns
-        WHERE table_schema = %s
-        ORDER BY table_name, ordinal_position
+        WHERE table_schema = ANY(%s)
+          AND table_name NOT LIKE '\\_%%' AND column_name NOT LIKE '\\_%%'
+        ORDER BY array_position(%s, table_schema::text), table_name, ordinal_position
         """,
-        (SCHEMA,),
+        (SCHEMAS, SCHEMAS),
     ).fetchall()
-    return [ColumnProfile(t, c, d) for t, c, d in rows]
+    return [ColumnProfile(s, t, c, d) for s, t, c, d in rows]
 
 
 def profile_column(conn, col: ColumnProfile) -> ColumnProfile:
     """Étape 2 : statistiques + échantillon pour une colonne."""
     # sql.Identifier protège les noms de tables/colonnes (pas d'injection SQL)
-    table = sql.Identifier(SCHEMA, col.table_name)
+    table = sql.Identifier(col.schema_name, col.table)
     column = sql.Identifier(col.column_name)
 
     stats = sql.SQL("""
@@ -116,6 +126,9 @@ def save_profiles(conn, profiles: list[ColumnProfile]) -> int:
 
 def run() -> tuple[int, list[ColumnProfile]]:
     with connect() as conn:
+        # Graine fixe pour random() : deux scans des mêmes données tirent les mêmes
+        # échantillons, donc donnent les mêmes résultats (scan reproductible).
+        conn.execute("SELECT setseed(0.42)")
         profiles = [profile_column(conn, c) for c in discover_columns(conn)]
         run_id = save_profiles(conn, profiles)
     return run_id, profiles
@@ -123,10 +136,10 @@ def run() -> tuple[int, list[ColumnProfile]]:
 
 if __name__ == "__main__":
     run_id, profiles = run()
-    print(f"Scan n°{run_id} : {len(profiles)} colonnes découvertes dans le schéma '{SCHEMA}'\n")
-    print(f"{'table':<14}{'colonne':<18}{'type':<10}{'lignes':>7}{'nulls':>7}"
+    print(f"Scan n°{run_id} : {len(profiles)} colonnes découvertes dans {', '.join(SCHEMAS)}\n")
+    print(f"{'table':<30}{'colonne':<22}{'type':<10}{'lignes':>7}{'nulls':>7}"
           f"{'distinct':>9}{'long.':>7}  exemple")
     for p in profiles:
         exemple = (p.sample[0] if p.sample else "")[:30]
-        print(f"{p.table_name:<14}{p.column_name:<18}{p.data_type[:9]:<10}{p.n_rows:>7}"
+        print(f"{p.table_name:<30}{p.column_name:<22}{p.data_type[:9]:<10}{p.n_rows:>7}"
               f"{p.null_ratio:>7}{p.distinct_ratio:>9}{p.avg_length:>7}  {exemple}")
